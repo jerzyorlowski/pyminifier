@@ -500,7 +500,7 @@ def fix_empty_methods(source):
     output = ""
     just_matched = False
     previous_line = None
-    method = re.compile(r'^\s*def\s*.*\(.*\):.*$')
+    method = re.compile(r'^\s*def\s*.*\(.*\):\s*$')
     for line in source.split('\n'):
         if len(line.strip()) > 0: # Don't look at blank lines
             if just_matched == True:
