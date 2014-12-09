@@ -556,14 +556,11 @@ def minify(tokens, options):
     result = token_utils.untokenize(tokens)
     # Minify our input script
     result = multiline_indicator.sub('', result)
-#     print result
     result = fix_empty_methods(result)
     result = join_multiline_pairs(result)
-#     print result + "xxxxxxxxxxxxxxxxxxxx\n"
     result = join_multiline_pairs(result, '[]')
     result = join_multiline_pairs(result, '{}')
     result = remove_blank_lines(result)
-#     print result + "xxxxxxxxxxxxxxxxxxxx\n"
     result = reduce_operators(result)
     result = dedent(result, use_tabs=options.tabs)
     
