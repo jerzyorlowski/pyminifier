@@ -9,3 +9,10 @@ __version__ = '2.1'
 __version_info__ = (2, 1)
 __license__ = "GPLv3" # See LICENSE.txt
 __author__ = 'Dan McDougall <daniel.mcdougall@liftoffsoftware.com>'
+
+import analyze
+import compression
+import minification
+import obfuscate
+import pyminifier
+import token_utils

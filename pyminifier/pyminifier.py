@@ -68,10 +68,10 @@ import os, sys, re, io
 from optparse import OptionParser
 
 # Import our own modules
-from . import minification
-from . import token_utils
-from . import obfuscate
-from . import compression
+import minification
+import token_utils
+import obfuscate
+import compression
 
 py3 = False
 lzma = False

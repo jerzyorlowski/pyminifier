@@ -10,8 +10,8 @@ from random import shuffle, choice
 from itertools import permutations
 
 # Import our own modules
-from . import analyze
-from . import token_utils
+import analyze
+import token_utils
 
 if sys.version_info.major == 3:
     unichr = chr # So we can support both 2 and 3
