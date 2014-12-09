@@ -12,7 +12,7 @@ except ImportError: # We're using Python 3
     import io
 
 # Import our own modules
-from . import analyze, token_utils
+import analyze, token_utils
 
 # Compile our regular expressions for speed
 multiline_quoted_string = re.compile(r'(\'\'\'|\"\"\")')
@@ -236,6 +236,130 @@ def reduce_operators(source):
     # The tokenize module doesn't recognize @ sign before a decorator
     return out
 
+def join_multiline_pairs_line(line,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex):
+    line_outputs=[]
+    escaped = False
+    # First we rule out multi-line strings
+    multline_match = multiline_quoted_string.search(line)
+    not_quoted_string_match = not_quoted_string.search(line)
+    if multline_match and not not_quoted_string_match:
+        if '"""' in line:
+            lines_split=line.split('"""')
+            lines_split_normal=lines_split[0:-1]
+            line_split_last=lines_split_normal[-1]
+            for line_split in lines_split_normal:
+                if quoted_string:
+                    quoted_string=False
+                else:
+                    line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+                    line_outputs+=line_outputs2
+                    quoted_string=True
+            if not quoted_string:
+                line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+                line_outputs+=line_outputs2
+                #We do not handle triple quotes """ inside triple quiotes '''
+            return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+        if "'''" in line:
+            lines_split=line.split("'''")
+            lines_split_normal=lines_split[0:-1]
+            line_split_last=lines_split_normal[-1]
+            for line_split in lines_split_normal:
+                if quoted_string:
+                    quoted_string=False
+                else:
+                    line_outputs += (join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)[0])
+                    quoted_string=True
+            if not quoted_string:
+                line_outputs +=(join_multiline_pairs_line(line_split_last,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)[0])
+            #We do not handle triple quotes """ inside triple quotes '''
+            return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+    # Now let's focus on the lines containing our opener and/or closer:
+    elif not quoted_string:
+        if opener_regex.search(line) or closer_regex.search(line) or inside_pair:
+            single_line_output=""
+            for n, character in enumerate(line):
+                if character == opener:
+                    if not escaped and not inside_quotes:
+                        openers += 1
+                        inside_pair = True
+                        single_line_output += character
+                    else:
+                        escaped = False
+                        single_line_output += character
+                elif character == closer:
+                    if not escaped and not inside_quotes:
+                        if openers and openers == (closers + 1):
+                            closers = 0
+                            openers = 0
+                            inside_pair = False
+                            single_line_output += character
+                            if n == (len(line)-1):
+                                single_line_output += '\n'
+                        else:
+                            closers += 1
+                            if openers == closers:
+                                single_line_output += '\n'
+                            single_line_output += character
+                    else:
+                        escaped = False
+                        single_line_output += character
+                elif character == '\\':
+                    if escaped:
+                        escaped = False
+                        single_line_output += character
+                    else:
+                        escaped = True
+                        single_line_output += character
+                elif character == '"' and escaped:
+                    single_line_output += character
+                    escaped = False
+                elif character == "'" and escaped:
+                    single_line_output += character
+                    escaped = False
+                elif character == '"' and inside_quotes:
+                    if inside_single_quotes:
+                        single_line_output += character
+                    else:
+                        inside_quotes = False
+                        inside_double_quotes = False
+                        single_line_output += character
+                elif character == "'" and inside_quotes:
+                    if inside_double_quotes:
+                        single_line_output += character
+                    else:
+                        inside_quotes = False
+                        inside_single_quotes = False
+                        single_line_output += character
+                elif character == '"' and not inside_quotes:
+                    inside_quotes = True
+                    inside_double_quotes = True
+                    single_line_output += character
+                elif character == "'" and not inside_quotes:
+                    inside_quotes = True
+                    inside_single_quotes = True
+                    single_line_output += character
+                elif character == ' ' and inside_pair and not inside_quotes:
+                    single_line_output += ' '
+                    
+#                     if not single_line_output[-1] in [' ', opener]:
+#                         single_line_output += ' '
+                else:
+                    if escaped:
+                        escaped = False
+                    single_line_output += character                
+            if inside_pair == False:
+                single_line_output += '\n'
+            line_outputs.append(single_line_output)
+            return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+        else:
+            line_outputs.append(line + '\n')    
+            return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+    else:
+        line_outputs.append(line + '\n')    
+        return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+    
+    return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
+
 def join_multiline_pairs(text, pair="()"):
     """
     Finds and removes newlines in multiline matching pairs of characters in
@@ -280,109 +404,12 @@ def join_multiline_pairs(text, pair="()"):
 
     output = ""
     for line in text.split('\n'):
-        escaped = False
-        # First we rule out multi-line strings
-        multline_match = multiline_quoted_string.search(line)
-        not_quoted_string_match = not_quoted_string.search(line)
-        if multline_match and not not_quoted_string_match and not quoted_string:
-            if '"""' in line:
-                if len(line.split('"""')) % 2 == 0:
-                    # Begin triple double quotes
-                    output += line + '\n'
-                    quoted_string = True
-                else:
-                    # End triple double quotes
-                    output += line + '\n'
-                    quoted_string = False
-            elif "'''" in line:
-                if len(line.split("'''")) % 2 == 0:
-                    # Begin triple single quotes
-                    output += line + '\n'
-                    quoted_string = True
-                else:
-                    # End triple single quotes
-                    output += line + '\n'
-                    quoted_string = False
-        elif multline_match and quoted_string:
-            output += line + '\n'
-            quoted_string = False
-        # Now let's focus on the lines containing our opener and/or closer:
-        elif not quoted_string:
-            if opener_regex.search(line) or closer_regex.search(line) or inside_pair:
-                for n, character in enumerate(line):
-                    if character == opener:
-                        if not escaped and not inside_quotes:
-                            openers += 1
-                            inside_pair = True
-                            output += character
-                        else:
-                            escaped = False
-                            output += character
-                    elif character == closer:
-                        if not escaped and not inside_quotes:
-                            if openers and openers == (closers + 1):
-                                closers = 0
-                                openers = 0
-                                inside_pair = False
-                                output += character
-                                if n == (len(line)-1):
-                                    output += '\n'
-                            else:
-                                closers += 1
-                                if openers == closers:
-                                    output += '\n'
-                                output += character
-                        else:
-                            escaped = False
-                            output += character
-                    elif character == '\\':
-                        if escaped:
-                            escaped = False
-                            output += character
-                        else:
-                            escaped = True
-                            output += character
-                    elif character == '"' and escaped:
-                        output += character
-                        escaped = False
-                    elif character == "'" and escaped:
-                        output += character
-                        escaped = False
-                    elif character == '"' and inside_quotes:
-                        if inside_single_quotes:
-                            output += character
-                        else:
-                            inside_quotes = False
-                            inside_double_quotes = False
-                            output += character
-                    elif character == "'" and inside_quotes:
-                        if inside_double_quotes:
-                            output += character
-                        else:
-                            inside_quotes = False
-                            inside_single_quotes = False
-                            output += character
-                    elif character == '"' and not inside_quotes:
-                        inside_quotes = True
-                        inside_double_quotes = True
-                        output += character
-                    elif character == "'" and not inside_quotes:
-                        inside_quotes = True
-                        inside_single_quotes = True
-                        output += character
-                    elif character == ' ' and inside_pair and not inside_quotes:
-                        if not output[-1] in [' ', opener]:
-                            output += ' '
-                    else:
-                        if escaped:
-                            escaped = False
-                        output += character
-                if inside_pair == False:
-                    output += '\n'
-            else:
-                output += line + '\n'
-        else:
-            output += line + '\n'
+        try:
+            (line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers)=join_multiline_pairs_line(line,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+            output+="".join(line_outputs)
+        except:
+            raise
+
     # Clean up
     output = trailing_newlines.sub('\n', output)
     return output
@@ -522,4 +549,3 @@ def minify(tokens, options):
     result = remove_blank_lines(result)
     result = reduce_operators(result)
     result = dedent(result, use_tabs=options.tabs)
-    return result
