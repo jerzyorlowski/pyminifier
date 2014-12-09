@@ -246,31 +246,45 @@ def join_multiline_pairs_line(line,inside_pair,inside_quotes,inside_double_quote
         if '"""' in line:
             lines_split=line.split('"""')
             lines_split_normal=lines_split[0:-1]
-            line_split_last=lines_split_normal[-1]
+            line_split_last=lines_split[-1]
             for line_split in lines_split_normal:
                 if quoted_string:
                     quoted_string=False
+                    line_outputs+=[line_split]
                 else:
                     line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
-                    line_outputs+=line_outputs2
+                    line_outputs+=[line_output2.rstrip('\n') for line_output2 in line_outputs2]
                     quoted_string=True
+                line_outputs += ['"""']
             if not quoted_string:
-                line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
-                line_outputs+=line_outputs2
+                line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split_last,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+                line_outputs+=[line_output2.rstrip('\n') for line_output2 in line_outputs2]
+                quoted_string=True
+            else:
+                line_outputs+=[line_split_last]
+            line_outputs[-1]+="\n"
                 #We do not handle triple quotes """ inside triple quiotes '''
             return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
         if "'''" in line:
             lines_split=line.split("'''")
             lines_split_normal=lines_split[0:-1]
-            line_split_last=lines_split_normal[-1]
+            line_split_last=lines_split[-1]
             for line_split in lines_split_normal:
                 if quoted_string:
                     quoted_string=False
+                    line_outputs+=[line_split]
                 else:
-                    line_outputs += (join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)[0])
+                    line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+                    line_outputs+=[line_output2.rstrip('\n') for line_output2 in line_outputs2]
                     quoted_string=True
+                line_outputs += ["'''"]
             if not quoted_string:
-                line_outputs +=(join_multiline_pairs_line(line_split_last,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)[0])
+                line_outputs2,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers = join_multiline_pairs_line(line_split_last,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers,opener,closer,opener_regex,closer_regex)
+                line_outputs+=[line_output2.rstrip('\n') for line_output2 in line_outputs2]
+                quoted_string=True
+            else:
+                line_outputs+=[line_split_last]
+            line_outputs[-1]+="\n"
             #We do not handle triple quotes """ inside triple quotes '''
             return [line_outputs,inside_pair,inside_quotes,inside_double_quotes,inside_single_quotes,quoted_string,openers,closers]
     # Now let's focus on the lines containing our opener and/or closer:
@@ -542,10 +556,15 @@ def minify(tokens, options):
     result = token_utils.untokenize(tokens)
     # Minify our input script
     result = multiline_indicator.sub('', result)
+#     print result
     result = fix_empty_methods(result)
     result = join_multiline_pairs(result)
+#     print result + "xxxxxxxxxxxxxxxxxxxx\n"
     result = join_multiline_pairs(result, '[]')
     result = join_multiline_pairs(result, '{}')
     result = remove_blank_lines(result)
+#     print result + "xxxxxxxxxxxxxxxxxxxx\n"
     result = reduce_operators(result)
     result = dedent(result, use_tabs=options.tabs)
+    
+    return result
